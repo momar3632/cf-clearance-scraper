@@ -5,6 +5,7 @@ const bodyParser = require('body-parser')
 const authToken = process.env.authToken || null
 const cors = require('cors')
 const reqValidate = require('./module/reqValidate')
+const { HttpsProxyAgent } = require('https-proxy-agent');
 
 global.browserLength = 0
 global.browserLimit = Number(process.env.browserLimit) || 20
@@ -26,6 +27,87 @@ const solveTurnstileMin = require('./endpoints/solveTurnstile.min')
 const solveTurnstileMax = require('./endpoints/solveTurnstile.max')
 const wafSession = require('./endpoints/wafSession')
 
+app.post('/scrape', async (req, res) => {
+    const { url, headers, body, type, proxy } = req.body;
+  
+    if (!url || !type) {
+      return res.status(400).json({ error: 'url and type (method) are required' });
+    }
+  
+    let axiosConfig = {
+      method: type.toLowerCase(),
+      url,
+      headers: headers || {},
+      data: body || {},
+      timeout: 30000,
+      responseType: 'stream', // <= ده مهم جدا
+      validateStatus: () => true,
+    };
+  
+    if (proxy && proxy.host && proxy.port) {
+      let proxyAuth = '';
+      if (proxy.username && proxy.password) {
+        proxyAuth = `${proxy.username}:${proxy.password}@`;
+      }
+      const proxyUrl = `http://${proxyAuth}${proxy.host}:${proxy.port}`;
+      axiosConfig.httpsAgent = new HttpsProxyAgent(proxyUrl);
+      axiosConfig.proxy = false;
+    }
+  
+    try {
+      const response = await axios(axiosConfig);
+  
+      res.status(response.status);
+
+    // ابعت نفس headers
+    for (let key in response.headers) {
+      res.setHeader(key, response.headers[key]);
+    }
+
+    // ابعت ال body زى ما هو
+    response.data.pipe(res);
+
+    //   console.log(response.headers['content-type']);
+    //   console.log(typeof response.data);
+    //   console.log(response.data.slice(0, 500)); // first 500 chars
+  
+    //   let rawData = response.data;
+    //   let parsedChunks = [];
+  
+    //   // Detect amazon streaming content-type
+    //   const isAmazonStreaming = (response.headers['content-type'] || '').includes('application/json-amazonui-streaming');
+  
+    //   if (isAmazonStreaming) {
+    //     // split by &&& and parse each part
+    //     parsedChunks = rawData
+    //       .split('&&&')
+    //       .map(part => part.trim())
+    //       .filter(part => part.length > 0)
+    //       .map(part => {
+    //         try {
+    //           return JSON.parse(part);
+    //         } catch (err) {
+    //           console.error('JSON parse error on part:', part.slice(0, 100), err);
+    //           return null;
+    //         }
+    //       })
+    //       .filter(item => item !== null);
+    //   }
+  
+
+    //   res.status(response.status).json({
+    //     status: response.status,
+    //     statusText: response.statusText,
+    //     headers: response.headers,
+    //     data: isAmazonStreaming ? parsedChunks : rawData,
+    //   });
+    } catch (error) {
+      res.status(500).json({
+        error: error.message,
+        details: error.response ? error.response.data : null,
+      });
+    }
+  });
 
 app.post('/cf-clearance-scraper', async (req, res) => {
 
