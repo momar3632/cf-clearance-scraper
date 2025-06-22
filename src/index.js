@@ -6,6 +6,7 @@ const authToken = process.env.authToken || null
 const cors = require('cors')
 const reqValidate = require('./module/reqValidate')
 const { HttpsProxyAgent } = require('https-proxy-agent');
+const axios = require('axios');
 
 global.browserLength = 0
 global.browserLimit = Number(process.env.browserLimit) || 20
